@@ -1,6 +1,6 @@
 builders:
   graphql:
-    import: "package:graphql_generator2/graphql_generator2.dart"
+    import: "package:graphql_generator3/graphql_generator3.dart"
     builder_factories:
       - graphQLBuilder
     auto_apply: root_package
