@@ -1,0 +1,14 @@
+builders:
+  graphql:
+    import: "package:graphql_generator2/graphql_generator2.dart"
+    builder_factories:
+      - graphQLBuilder
+    auto_apply: root_package
+    build_to: cache
+    build_extensions:
+      .dart:
+        - graphql_generator3.g.part
+    required_inputs:
+      - angel3_serialize.g.part
+    applies_builders:
+      - source_gen|combining_builder
