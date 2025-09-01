@@ -192,7 +192,7 @@ Library _buildClassSchemaLibrary(
           graphType = graphType.property('nonNullable').call([]);
         }
 
-        final jsonKeyName = ctx.resolveFieldName(field.name) ?? field.name;
+        final jsonKeyName = _jsonNameFor(field, ctx);
 
         // Condition to generate either an output field or an input field
         if (isInputType) {
@@ -344,4 +344,19 @@ void _applyDescription(Map<String, Expression> named, Element element, String? d
   if (docString != null) {
     named['description'] = literalString(docString.replaceAll(_docComment, '').replaceAll('\n', '\\n'));
   }
+}
+
+String _jsonNameFor(FieldElement field, BuildContext ctx) {
+  var name = ctx.resolveFieldName(field.name) ?? field.name;
+
+  final ann = const TypeChecker.fromRuntime(JsonKey).firstAnnotationOf(field);
+  if (ann != null) {
+    final cr = ConstantReader(ann);
+    final forced = cr.peek('name')?.stringValue;
+    if (forced != null && forced.isNotEmpty) {
+      name = forced;
+    }
+  }
+
+  return name;
 }
