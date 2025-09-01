@@ -13,6 +13,7 @@ import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
 
 import 'graphql_annotations.dart';
+export 'graphql_annotations.dart';
 
 var _docComment = RegExp(r'^/// ', multiLine: true);
 var _graphQLDoc = TypeChecker.fromRuntime(GraphQLDocumentation);
