@@ -8,12 +8,10 @@ import 'package:angel3_serialize_generator/angel3_serialize_generator.dart';
 import 'package:build/build.dart';
 import 'package:code_builder/code_builder.dart';
 import 'package:graphql_schema2/graphql_schema2.dart';
+import 'package:graphql_annotation3/graphql_annotation3.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
-
-import 'graphql_annotations.dart';
-export 'graphql_annotations.dart';
 
 var _docComment = RegExp(r'^/// ', multiLine: true);
 var _graphQLDoc = TypeChecker.fromRuntime(GraphQLDocumentation);

@@ -1,8 +1,7 @@
 name: graphql_generator3
 version: 7.0.0
 description: Generates GraphQL schemas from Dart classes, for use with pkg:graphql_server2.
-homepage: https://angel3-framework.web.app/
-repository: https://github.com/dart-backend/graphql_dart/tree/master/packages/graphql_generator
+publish_to: none
 environment:
   sdk: '>=3.6.0 <4.0.0'
 dependencies:
@@ -17,6 +16,8 @@ dependencies:
   recase: ^4.1.0
   source_gen: ^2.0.0
   collection: ^1.17.0
+  graphql_annotation3:
+    git: https://github.com/raphrmx/graphql_annotation3.git
 dev_dependencies:
   build_runner: ^2.4.0
   lints: ^5.0.0
