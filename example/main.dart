@@ -1,4 +1,4 @@
-import 'package:graphql_schema3/graphql_schema3.dart';
+import 'package:graphql_schema2/graphql_schema2.dart';
 part 'main.g.dart';
 
 @graphQLClass

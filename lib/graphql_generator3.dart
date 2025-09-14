@@ -1,30 +1,29 @@
 import 'dart:async';
 import 'dart:mirrors';
-import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/element2.dart';
 import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
-import 'package:angel3_model/angel3_model.dart';
 import 'package:angel3_serialize_generator/angel3_serialize_generator.dart';
 import 'package:build/build.dart';
 import 'package:code_builder/code_builder.dart';
+import 'package:graphql_generator3/extensions.dart';
 import 'package:graphql_schema2/graphql_schema2.dart';
 import 'package:graphql_annotation3/graphql_annotation3.dart';
-import 'package:json_annotation/json_annotation.dart';
 import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
 
 var _docComment = RegExp(r'^/// ', multiLine: true);
-var _graphQLDoc = TypeChecker.fromRuntime(GraphQLDocumentation);
-var _graphQLClassTypeChecker = TypeChecker.fromRuntime(GraphQLClass);
-var _graphQLInputClassTypeChecker = TypeChecker.fromRuntime(GraphQLInputClass);
-var _graphQLResolverTypeChecker = TypeChecker.fromRuntime(GraphQLResolver);
-var _graphQLUnionTypeChecker = TypeChecker.fromRuntime(GraphQLUnion);
+var _graphQLDoc = TypeChecker.fromUrl('package:graphql_schema2/graphql_schema2.dart#GraphQLDocumentation');
+var _graphQLClassTypeChecker = TypeChecker.fromUrl('package:graphql_schema2/graphql_schema2.dart#graphQLClass');
+var _graphQLInputClassTypeChecker = TypeChecker.fromUrl('package:graphql_annotation3/graphql_annotation3.dart#GraphQLInputClass');
+var _graphQLResolverTypeChecker = TypeChecker.fromUrl('package:graphql_annotation3/graphql_annotation3.dart#GraphQLResolver');
+var _graphQLUnionTypeChecker = TypeChecker.fromUrl('package:graphql_annotation3/graphql_annotation3.dart#GraphQLUnion');
 
 bool _isEnumType(DartType t) =>
-    t is InterfaceType && t.element is EnumElement;
+    t is InterfaceType && t.element3 is EnumElement2;
 
 bool _isIterable(DartType t) =>
-    t is InterfaceType && TypeChecker.fromRuntime(Iterable).isAssignableFromType(t);
+    t is InterfaceType && TypeChecker.fromUrl('dart:core#Iterable').isAssignableFromType(t);
 
 DartType? _iterableArg(DartType t) =>
     _isIterable(t) ? (t as InterfaceType).typeArguments.first : null;
@@ -42,11 +41,11 @@ Builder graphQLBuilder(_) {
 class _GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element element,
+      Element2 element,
       ConstantReader annotation,
       BuildStep buildStep,
       ) async {
-    if (element is ClassElement) {
+    if (element is ClassElement2) {
       final packageName = buildStep.inputId.package;
       var ctx = await buildContext(
         element,
@@ -59,7 +58,7 @@ class _GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
       var lib = _buildClassSchemaLibrary(element, ctx, annotation, false, packageName: packageName);
       return lib.accept(DartEmitter()).toString();
     }
-    if (element is EnumElement) {
+    if (element is EnumElement2) {
       var lib = _buildEnumSchemaLibrary(element, annotation);
       return lib.accept(DartEmitter()).toString();
     }
@@ -71,11 +70,11 @@ class _GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
 class _GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element element,
+      Element2 element,
       ConstantReader annotation,
       BuildStep buildStep,
       ) async {
-    if (element is ClassElement) {
+    if (element is ClassElement2) {
       final packageName = buildStep.inputId.package;
       var ctx = await buildContext(
         element,
@@ -96,17 +95,16 @@ class _GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
 class _GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element element,
+      Element2 element,
       ConstantReader annotation,
       BuildStep buildStep,
       ) async {
-    if (element is! ClassElement) {
+    if (element is! ClassElement2) {
       throw UnsupportedError('@GraphQLUnion() is only supported on classes.');
     }
 
     // Nom Dart de l’union (ex: TestUnion)
     final unionDartName = element.name;
-    final rc = _graphQLTypeNameFor(element, isInput: false);
 
     // Nom SDL attendu (ex: _TestUnion)
     final sdlName = annotation.peek('name')?.stringValue ?? _graphQLTypeNameFor(element, isInput: false);
@@ -122,8 +120,8 @@ class _GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
       final dt = ConstantReader(obj).typeValue;
 
       // Récupère le nom simple de la classe (ex: BmcBddInvoiceTotal)
-      final el = dt.element;
-      if (el is! ClassElement) {
+      final el = dt.element3;
+      if (el is! ClassElement2) {
         // Par sécurité, on ignore tout ce qui ne serait pas une classe
         continue;
       }
@@ -167,11 +165,11 @@ class _GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
 }
 
 // The library building functions are now shared
-Library _buildEnumSchemaLibrary(EnumElement clazz, ConstantReader ann) {
+Library _buildEnumSchemaLibrary(EnumElement2 clazz, ConstantReader ann) {
   return Library((b) {
     b.body.add(Field((b) {
       var args = <Expression>[literalString(clazz.name)];
-      var values = clazz.fields.where((f) => f.isEnumConstant).map((f) => f.name);
+      var values = clazz.fields.map((f) => f.name);
       var named = <String, Expression>{};
       _applyDescription(named, clazz, clazz.documentationComment);
       args.add(literalConstList(values.map(literalString).toList()));
@@ -188,7 +186,7 @@ Library _buildEnumSchemaLibrary(EnumElement clazz, ConstantReader ann) {
 }
 
 Library _buildClassSchemaLibrary(
-    ClassElement clazz,
+    ClassElement2 clazz,
     BuildContext? ctx,
     ConstantReader ann,
     bool isInputType, {
@@ -198,7 +196,7 @@ Library _buildClassSchemaLibrary(
 
   // Helpers locaux
   DartType unwrapFuture(DartType t) {
-    if (t is InterfaceType && t.typeArguments.isNotEmpty && t.element.name == 'Future') {
+    if (t is InterfaceType && t.typeArguments.isNotEmpty && t.element3.name == 'Future') {
       return t.typeArguments.first;
     }
     return t;
@@ -222,7 +220,7 @@ Library _buildClassSchemaLibrary(
 
   // Détecte si un type Dart correspond à la classe courante (auto-référence)
   bool isSelfType(DartType t) =>
-      t is InterfaceType && t.element.name == clazz.name;
+      t is InterfaceType && t.element3.name == clazz.name;
 
   bool isSelfOrListOfSelf(DartType t) {
     if (isSelfType(t)) return true;
@@ -265,7 +263,7 @@ Library _buildClassSchemaLibrary(
   }
 
   // Description “brute” pour inputObjectType
-  String? descriptionFor(Element element) {
+  String? descriptionFor(Element2 element) {
     var docString = element.documentationComment;
     if (docString == null && _graphQLDoc.hasAnnotationOf(element)) {
       final ann = _graphQLDoc.firstAnnotationOf(element);
@@ -288,8 +286,8 @@ Library _buildClassSchemaLibrary(
 
   if (!isInputType) {
     final interfaces = clazz.interfaces.where(_isGraphQLClass).map((c) {
-      var rawName = c.element.name;
-      if (serializableTypeChecker.hasAnnotationOf(c.element) && rawName.startsWith('_')) {
+      var rawName = c.element3.name;
+      if (serializableTypeChecker.hasAnnotationOf(c.element3) && rawName.startsWith('_')) {
         rawName = rawName.substring(1);
       }
       final rc = ReCase(rawName);
@@ -299,15 +297,15 @@ Library _buildClassSchemaLibrary(
   }
 
   // ========= Collecte des champs (propriétés) y compris héritage =========
-  final collectedFields = <FieldElement>[];
+  final collectedFields = <FieldElement2>[];
   InterfaceType? search = clazz.thisType;
-  while (search != null && !TypeChecker.fromRuntime(Object).isExactlyType(search)) {
-    for (final f in search.element.fields) {
+  while (search != null && !TypeChecker.fromUrl('dart:core#Object').isExactlyType(search)) {
+    for (final f in search.element3.fields2) {
       if (f.isStatic || f.isSynthetic) continue;
       if (collectedFields.any((e) => e.name == f.name)) continue;
 
       // Respect des @JsonKey(includeFromJson / includeToJson)
-      final jsonKeyAnn = const TypeChecker.fromRuntime(JsonKey).firstAnnotationOf(f);
+      final jsonKeyAnn = const TypeChecker.fromUrl('package:json_annotation/json_annotation.dart#JsonKey').firstAnnotationOf(f);
       if (jsonKeyAnn != null) {
         final cr = ConstantReader(jsonKeyAnn);
         final incFrom = cr.peek('includeFromJson')?.boolValue;
@@ -330,7 +328,7 @@ Library _buildClassSchemaLibrary(
     final namedArgs = <String, Expression>{};
 
     _applyDescription(namedArgs, field, field.documentationComment);
-    final depAnn = TypeChecker.fromRuntime(Deprecated).firstAnnotationOf(field);
+    final depAnn = TypeChecker.fromUrl('dart:core#Deprecated').firstAnnotationOf(field);
     if (depAnn != null) {
       final dep = ConstantReader(depAnn);
       final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
@@ -371,7 +369,7 @@ Library _buildClassSchemaLibrary(
       );
     } else {
       // Output: field(...) + resolve (Map ou instance)
-      final isDateTime = TypeChecker.fromRuntime(DateTime).isAssignableFromType(field.type);
+      final isDateTime = TypeChecker.fromUrl('dart:core#DateTime').isAssignableFromType(field.type);
       final isEnum = _isEnumType(field.type);
       final listArg = _iterableArg(field.type);
       final isListOfEnum = listArg != null && _isEnumType(listArg);
@@ -410,10 +408,10 @@ Library _buildClassSchemaLibrary(
 
   // --- 2) Méthodes @GraphQLResolver (OUTPUT uniquement) ---
   if (!isInputType) {
-    final collectedMethods = <MethodElement>[];
+    final collectedMethods = <MethodElement2>[];
     InterfaceType? searchM = clazz.thisType;
-    while (searchM != null && !TypeChecker.fromRuntime(Object).isExactlyType(searchM)) {
-      for (final m in searchM.element.methods) {
+    while (searchM != null && !TypeChecker.fromUrl('dart:core#Object').isExactlyType(searchM)) {
+      for (final m in searchM.element3.methods2) {
         if (m.isStatic) continue;
         if (!_graphQLResolverTypeChecker.hasAnnotationOf(m)) continue;
         if (collectedMethods.any((x) => x.name == m.name)) continue;
@@ -426,7 +424,7 @@ Library _buildClassSchemaLibrary(
       final namedArgs = <String, Expression>{};
 
       _applyDescription(namedArgs, m, m.documentationComment);
-      final depAnn = TypeChecker.fromRuntime(Deprecated).firstAnnotationOf(m);
+      final depAnn = TypeChecker.fromUrl('dart:core#Deprecated').firstAnnotationOf(m);
       if (depAnn != null) {
         final dep = ConstantReader(depAnn);
         final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
@@ -441,12 +439,15 @@ Library _buildClassSchemaLibrary(
       );
 
       final inputExprs = <Expression>[];
-      for (final p in m.parameters) {
-        final argName = p.name;
+      final funcType = m.type;
+      for (final param in funcType.formalParameters) {
+        final argName = param.name;
+        final argType = param.type;
+
         final argGraphType = graphQLTypeForDartType(
           clazz.name,
           '${m.name}.$argName',
-          p.type,
+          argType,
           forInput: true,
         );
 
@@ -599,25 +600,25 @@ Library _buildClassSchemaLibrary(
 // Updated inference function to recognize input types
 Expression _inferType(String className, String name, DartType type, bool isInputType) {
   if (type is InterfaceType) {
-    if (_graphQLUnionTypeChecker.hasAnnotationOf(type.element)) {
+    if (_graphQLUnionTypeChecker.hasAnnotationOf(type.element3)) {
       if (isInputType) {
         throw 'Union types are not allowed in input fields ($className.$name).';
       }
-      final rc = ReCase(type.element.name); // ex: BmcTestUnion
+      final rc = ReCase(type.element3.name); // ex: BmcTestUnion
       return refer('${rc.camelCase}GraphQLType'); // -> bmcTestUnionGraphQLType
     }
 
     // If the class is a @GraphQLInputClass, reference its input type.
-    if (_graphQLInputClassTypeChecker.hasAnnotationOf(type.element)) {
+    if (_graphQLInputClassTypeChecker.hasAnnotationOf(type.element3)) {
       final c = type;
-      final rc = ReCase(c.element.name);
+      final rc = ReCase(c.element3.name);
       return refer('${rc.camelCase}InputGraphQLType');
     }
     // If the class is a @GraphQLClass, reference its output type.
     if (_isGraphQLClass(type)) {
       final c = type;
-      var rawName = c.element.name;
-      if (serializableTypeChecker.hasAnnotationOf(c.element) && rawName.startsWith('_')) {
+      var rawName = c.element3.name;
+      if (serializableTypeChecker.hasAnnotationOf(c.element3) && rawName.startsWith('_')) {
         rawName = rawName.substring(1);
       }
       final rc = ReCase(rawName);
@@ -626,43 +627,33 @@ Expression _inferType(String className, String name, DartType type, bool isInput
   }
 
   // Inference logic for primitive types and lists (unchanged)
-  if (TypeChecker.fromRuntime(Model).isAssignableFromType(type) && name == 'id') {
+  if (TypeChecker.fromUrl('package:angel3_model/angel3_model.dart#Model').isAssignableFromType(type) && name == 'id') {
     return refer('graphQLId');
   }
 
-  var primitive = {
-    String: 'graphQLString',
-    int: 'graphQLInt',
-    double: 'graphQLFloat',
-    bool: 'graphQLBoolean',
-    DateTime: 'graphQLDate'
-  };
-
-  for (var entry in primitive.entries) {
-    if (TypeChecker.fromRuntime(entry.key).isAssignableFromType(type)) {
-      return refer(entry.value);
-    }
-  }
+  final primitive = _inferPrimitive(type);
+  if (primitive != null) return primitive;
 
   if (type is InterfaceType &&
       type.typeArguments.isNotEmpty &&
-      TypeChecker.fromRuntime(Iterable).isAssignableFromType(type)) {
+      TypeChecker.fromUrl('dart:core#Iterable').isAssignableFromType(type)) {
     final arg = type.typeArguments[0];
     final inner = _inferType(className, name, arg, isInputType);
     return refer('listOf').call([inner]);
   }
 
-  throw 'Cannot infer the GraphQL type for field $className.$name (type=$type).';
+  return refer(name);
+  //throw 'Cannot infer the GraphQL type for field $className.$name (type=$type).';
 }
 
-bool isInterface(ClassElement clazz) {
+bool isInterface(ClassElement2 clazz) {
   return clazz.isAbstract && !serializableTypeChecker.hasAnnotationOf(clazz);
 }
 
 bool _isGraphQLClass(InterfaceType clazz) {
   InterfaceType? search = clazz;
   while (search != null) {
-    if (_graphQLClassTypeChecker.hasAnnotationOf(search.element)) {
+    if (_graphQLClassTypeChecker.hasAnnotationOf(search.element3)) {
       return true;
     }
     search = search.superclass;
@@ -670,7 +661,7 @@ bool _isGraphQLClass(InterfaceType clazz) {
   return false;
 }
 
-void _applyDescription(Map<String, Expression> named, Element element, String? docComment) {
+void _applyDescription(Map<String, Expression> named, Element2 element, String? docComment) {
   var docString = docComment;
   if (docString == null && _graphQLDoc.hasAnnotationOf(element)) {
     var ann = _graphQLDoc.firstAnnotationOf(element);
@@ -682,10 +673,10 @@ void _applyDescription(Map<String, Expression> named, Element element, String? d
   }
 }
 
-String _jsonNameFor(FieldElement field, BuildContext ctx) {
+String _jsonNameFor(FieldElement2 field, BuildContext ctx) {
   var name = ctx.resolveFieldName(field.name) ?? field.name;
 
-  final ann = const TypeChecker.fromRuntime(JsonKey).firstAnnotationOf(field);
+  final ann = const TypeChecker.fromUrl('package:json_annotation/json_annotation.dart#JsonKey').firstAnnotationOf(field);
   if (ann != null) {
     final cr = ConstantReader(ann);
     final forced = cr.peek('name')?.stringValue;
@@ -698,7 +689,7 @@ String _jsonNameFor(FieldElement field, BuildContext ctx) {
 }
 
 // Helper commun pour fabriquer le nom GraphQL
-String _graphQLTypeNameFor(ClassElement clazz, {required bool isInput}) {
+String _graphQLTypeNameFor(ClassElement2 clazz, {required bool isInput}) {
   final raw = clazz.name; // ex: BmcBddEmployee ou BmcBddEmployeeInput
 
   // retire le préfixe Bmc
@@ -717,14 +708,32 @@ String _graphQLTypeNameFor(ClassElement clazz, {required bool isInput}) {
   return base.startsWith('_') ? base : '_$base';
 }
 
-String _resolverImportFor(ClassElement clazz, String fieldName, {required String packageName}) {
+String _resolverImportFor(ClassElement2 clazz, String fieldName, {required String packageName}) {
   final typeSnake = ReCase(clazz.name).snakeCase;    // ex: bmc_device_data
   final fieldSnake = ReCase(fieldName).snakeCase;    // ex: booking_date_data
   return 'package:$packageName/graphql/resolvers/${typeSnake}_${fieldSnake}_resolver.dart';
 }
 
-String _resolverFnFor(ClassElement clazz, String fieldName) {
-  final typeCamel  = ReCase(clazz.name).camelCase;   // bmcDeviceData
-  final fieldPascal = ReCase(fieldName).pascalCase;  // BookingDateData
-  return '${typeCamel}${fieldPascal}Resolver';       // bmcDeviceDataBookingDateDataResolver
+final _stringChecker   = const TypeChecker.fromUrl('dart:core#String');
+final _intChecker      = const TypeChecker.fromUrl('dart:core#int');
+final _doubleChecker   = const TypeChecker.fromUrl('dart:core#double');
+final _boolChecker     = const TypeChecker.fromUrl('dart:core#bool');
+final _dateTimeChecker = const TypeChecker.fromUrl('dart:core#DateTime');
+Expression? _inferPrimitive(DartType type) {
+  if (_stringChecker.isAssignableFromType(type)) {
+    return refer('graphQLString');
+  }
+  if (_intChecker.isAssignableFromType(type)) {
+    return refer('graphQLInt');
+  }
+  if (_doubleChecker.isAssignableFromType(type)) {
+    return refer('graphQLFloat');
+  }
+  if (_boolChecker.isAssignableFromType(type)) {
+    return refer('graphQLBoolean');
+  }
+  if (_dateTimeChecker.isAssignableFromType(type)) {
+    return refer('graphQLDate');
+  }
+  return null;
 }
