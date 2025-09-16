@@ -1,5 +1,5 @@
 name: graphql_generator3
-version: 3.0.0
+version: 3.0.1
 description: Generates GraphQL schemas from Dart classes, for use with pkg:graphql_server3.
 publish_to: none
 

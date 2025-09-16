@@ -1,6 +1,7 @@
 import 'package:analyzer/dart/element/element2.dart';
 import 'package:code_builder/code_builder.dart';
 import 'package:graphql_generator3/src/extensions.dart';
+import 'package:graphql_generator3/src/type_checkers.dart';
 import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
 
@@ -36,12 +37,33 @@ import 'helpers.dart';
 Library buildEnumSchemaLibrary(EnumElement2 clazz, ConstantReader ann) {
   return Library((b) {
     final className = clazz.name;
-    final values = clazz.fields.map((f) => f.name).toList();
 
     final desc = cleanDescription(clazz.documentationComment);
     final descArg = desc != null && desc.isNotEmpty
         ? ", description: '${desc.replaceAll("'", "\\'")}'"
         : "";
+
+    final valuesCode = clazz.fields.map((f) {
+      if (f.isSynthetic) return null; // ignore "values", etc.
+      final v = f.name;
+
+      // description sur chaque valeur
+      final vDesc = cleanDescription(f.documentationComment);
+      final descPart = (vDesc != null && vDesc.isNotEmpty)
+          ? ", description: '${vDesc.replaceAll("'", "\\'")}'"
+          : "";
+
+      // deprecated sur chaque valeur
+      final depAnn = deprecatedTypeChecker.firstAnnotationOf(f);
+      String depPart = "";
+      if (depAnn != null) {
+        final dep = ConstantReader(depAnn);
+        final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
+        depPart = ", deprecationReason: '${reason.replaceAll("'", "\\'")}'";
+      }
+
+      return "GraphQLEnumValue('$v', $className.$v$descPart$depPart)";
+    }).whereType<String>().join(", ");
 
     b.body.add(
       Field((b) {
@@ -55,7 +77,7 @@ Library buildEnumSchemaLibrary(EnumElement2 clazz, ConstantReader ann) {
           ..assignment = Code(
             'GraphQLEnumType<$className>('
                 '\'$className\', '
-                '[${values.map((v) => "GraphQLEnumValue(\'$v\', $className.$v)").join(", ")}]'
+                '[$valuesCode]'
                 '$descArg'
                 ')',
           );
