@@ -1,8 +1,7 @@
-import 'package:analyzer/dart/element/element2.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:code_builder/code_builder.dart';
-import 'package:graphql_generator3/src/extensions.dart';
+import 'package:graphql_generator3/src/string_case.dart';
 import 'package:graphql_generator3/src/type_checkers.dart';
-import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
 
 import 'helpers.dart';
@@ -10,7 +9,7 @@ import 'helpers.dart';
 /// Builds a [Library] that defines a `GraphQLEnumType`
 /// for a given Dart enum annotated with `@GraphQLClass`.
 ///
-/// This function inspects the [EnumElement2] provided (`clazz`) and generates
+/// This function inspects the [EnumElement] provided (`clazz`) and generates
 /// a top-level `final` field representing its GraphQL type. The field:
 /// - Is named based on the enum's class name, converted to camelCase and
 ///   suffixed with `GraphQLType` (e.g., `myEnumGraphQLType`).
@@ -34,52 +33,56 @@ import 'helpers.dart';
 ///
 /// This function is part of the GraphQL schema generator pipeline and ensures
 /// that Dart enums can be directly exposed as GraphQL enums.
-Library buildEnumSchemaLibrary(EnumElement2 clazz, ConstantReader ann) {
+Library buildEnumSchemaLibrary(EnumElement clazz, ConstantReader ann) {
   return Library((b) {
-    final className = clazz.name;
+    final className = clazz.displayName;
 
     final desc = cleanDescription(clazz.documentationComment);
     final descArg = desc != null && desc.isNotEmpty
         ? ", description: '${desc.replaceAll("'", "\\'")}'"
         : "";
 
-    final valuesCode = clazz.fields.map((f) {
-      if (f.isSynthetic) return null; // ignore "values", etc.
-      final v = f.name;
+    final valuesCode = clazz.constants
+        .map((f) {
+          final v = f.displayName;
 
-      // description sur chaque valeur
-      final vDesc = cleanDescription(f.documentationComment);
-      final descPart = (vDesc != null && vDesc.isNotEmpty)
-          ? ", description: '${vDesc.replaceAll("'", "\\'")}'"
-          : "";
+          // Per-value description.
+          final vDesc = cleanDescription(f.documentationComment);
+          final descPart = (vDesc != null && vDesc.isNotEmpty)
+              ? ", description: '${vDesc.replaceAll("'", "\\'")}'"
+              : "";
 
-      // deprecated sur chaque valeur
-      final depAnn = deprecatedTypeChecker.firstAnnotationOf(f);
-      String depPart = "";
-      if (depAnn != null) {
-        final dep = ConstantReader(depAnn);
-        final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
-        depPart = ", deprecationReason: '${reason.replaceAll("'", "\\'")}'";
-      }
+          // Per-value deprecation.
+          final depAnn = deprecatedTypeChecker.firstAnnotationOf(f);
+          String depPart = "";
+          if (depAnn != null) {
+            final dep = ConstantReader(depAnn);
+            final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
+            depPart = ", deprecationReason: '${reason.replaceAll("'", "\\'")}'";
+          }
 
-      return "GraphQLEnumValue('$v', $className.$v$descPart$depPart)";
-    }).whereType<String>().join(", ");
+          return "GraphQLEnumValue('$v', $className.$v$descPart$depPart)";
+        })
+        .whereType<String>()
+        .join(", ");
 
     b.body.add(
       Field((b) {
         b
-          ..name = '${ReCase(className).camelCase}GraphQLType'
+          ..name = '${camelCase(className)}GraphQLType'
           ..docs.add('/// Auto-generated from [$className].')
-          ..type = TypeReference((b) => b
-            ..symbol = 'GraphQLEnumType'
-            ..types.add(refer(className)))
+          ..type = TypeReference(
+            (b) => b
+              ..symbol = 'GraphQLEnumType'
+              ..types.add(refer(className)),
+          )
           ..modifier = FieldModifier.final$
           ..assignment = Code(
             'GraphQLEnumType<$className>('
-                '\'$className\', '
-                '[$valuesCode]'
-                '$descArg'
-                ')',
+            '\'$className\', '
+            '[$valuesCode]'
+            '$descArg'
+            ')',
           );
       }),
     );

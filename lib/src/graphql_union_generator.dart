@@ -1,10 +1,8 @@
-
-import 'package:analyzer/dart/element/element2.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:code_builder/code_builder.dart';
-import 'package:graphql_generator3/src/extensions.dart';
+import 'package:graphql_generator3/src/string_case.dart';
 import 'package:graphql_schema3/graphql_schema3.dart';
-import 'package:recase/recase.dart';
 import 'package:source_gen/source_gen.dart';
 
 import 'helpers.dart';
@@ -34,20 +32,21 @@ import 'helpers.dart';
 class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element2 element,
-      ConstantReader annotation,
-      BuildStep buildStep,
-      ) async {
+    Element element,
+    ConstantReader annotation,
+    BuildStep buildStep,
+  ) async {
     // Ensure the annotation is only applied to a class.
-    if (element is! ClassElement2) {
+    if (element is! ClassElement) {
       throw UnsupportedError('@GraphQLUnion() is only supported on classes.');
     }
 
     // Dart name of the annotated class (e.g., `Animal`)
-    final unionDartName = element.name;
+    final unionDartName = element.displayName;
 
     // SDL name of the union type (defaults to GraphQL naming convention)
-    final sdlName = annotation.peek('name')?.stringValue ??
+    final sdlName =
+        annotation.peek('name')?.stringValue ??
         graphQLTypeNameFor(element, isInput: false);
 
     // Extract the list of types provided in `@GraphQLUnion(types: [...])`
@@ -58,12 +57,12 @@ class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
     // `xxxGraphQLType` variable as a possible type in the union.
     for (final obj in typeObjs) {
       final dt = ConstantReader(obj).typeValue;
-      final el = dt.element3;
-      if (el is! ClassElement2) {
+      final el = dt.element;
+      if (el is! ClassElement) {
         continue; // skip invalid entries
       }
-      final dartTypeName = el.name;
-      final varIdent = '${ReCase(dartTypeName).camelCase}GraphQLType';
+      final dartTypeName = el.displayName;
+      final varIdent = '${camelCase(dartTypeName)}GraphQLType';
       possibleTypeExprs.add(refer(varIdent));
     }
 
@@ -76,7 +75,7 @@ class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
     }
 
     // Name of the generated variable for this union
-    final unionVarName = '${ReCase(element.name).camelCase}GraphQLType';
+    final unionVarName = '${camelCase(element.displayName)}GraphQLType';
 
     // Build the output library that declares the union variable
     final lib = Library((b) {
@@ -89,12 +88,10 @@ class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
             ..name = unionVarName
             ..type = refer('GraphQLUnionType')
             ..modifier = FieldModifier.final$
-            ..assignment = refer('GraphQLUnionType')
-                .call([
+            ..assignment = refer('GraphQLUnionType').call([
               literalString(sdlName),
               literalList(possibleTypeExprs),
-            ])
-                .code;
+            ]).code;
         }),
       );
     });
@@ -102,4 +99,3 @@ class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
     return lib.accept(DartEmitter()).toString();
   }
 }
-

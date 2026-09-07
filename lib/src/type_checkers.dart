@@ -33,6 +33,12 @@ const unionTypeChecker = TypeChecker.fromUrl(
   'package:graphql_schema3/src/schema.dart#GraphQLUnion',
 );
 
+/// TypeChecker for the `@GraphQLSkip` annotation.
+/// Marks a field as not to be included in the GraphQL schema.
+const skipFieldTypeChecker = TypeChecker.fromUrl(
+  'package:graphql_schema3/src/schema.dart#GraphQLSkip',
+);
+
 /// TypeChecker for the `@JsonKey` annotation.
 /// Used to customize JSON field names and serialization behavior.
 const jsonKeyTypeChecker = TypeChecker.fromUrl(

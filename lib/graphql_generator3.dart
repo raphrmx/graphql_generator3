@@ -5,5 +5,9 @@ import 'package:graphql_generator3/src/graphql_union_generator.dart';
 import 'package:source_gen/source_gen.dart';
 
 Builder graphQLBuilder(_) {
-  return SharedPartBuilder([GraphQLGenerator(), GraphQLInputGenerator(), GraphQLUnionGenerator()], 'graphql_generator3');
+  return SharedPartBuilder([
+    GraphQLGenerator(),
+    GraphQLInputGenerator(),
+    GraphQLUnionGenerator(),
+  ], 'graphql_generator3');
 }

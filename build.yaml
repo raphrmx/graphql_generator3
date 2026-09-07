@@ -8,7 +8,5 @@ builders:
     build_extensions:
       .dart:
         - graphql_generator3.g.part
-    required_inputs:
-      - angel3_serialize.g.part
     applies_builders:
       - source_gen|combining_builder

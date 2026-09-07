@@ -1,8 +1,7 @@
-
-import 'package:analyzer/dart/element/element2.dart';
-import 'package:angel3_serialize_generator/angel3_serialize_generator.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:code_builder/code_builder.dart';
+import 'package:graphql_generator3/src/build_context.dart';
 import 'package:graphql_schema3/graphql_schema3.dart';
 import 'package:source_gen/source_gen.dart';
 
@@ -14,8 +13,8 @@ import 'build_enum_schema.dart';
 ///
 /// This generator supports two kinds of annotated elements:
 /// - **Classes**: Generates a `GraphQLObjectType` representation
-///   with fields mapped from the class’ properties and methods.
-/// - **Enums**: Generates a `GraphQLEnumType` based on the enum’s values.
+///   with fields mapped from the class' properties and methods.
+/// - **Enums**: Generates a `GraphQLEnumType` based on the enum's values.
 ///
 /// Example (class):
 /// ```dart
@@ -54,23 +53,17 @@ import 'build_enum_schema.dart';
 class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element2 element,
-      ConstantReader annotation,
-      BuildStep buildStep,
-      ) async {
+    Element element,
+    ConstantReader annotation,
+    BuildStep buildStep,
+  ) async {
     // If the annotated element is a class,
     // build a GraphQL object type schema.
-    if (element is ClassElement2) {
+    if (element is ClassElement) {
       final packageName = buildStep.inputId.package;
 
-      // Collect serialization context for the class.
-      final ctx = await buildContext(
-        element,
-        annotation,
-        buildStep,
-        buildStep.resolver,
-        serializableTypeChecker.hasAnnotationOf(element),
-      );
+      // Naming context for the class.
+      final ctx = GraphQLBuildContext(element);
 
       // Build the schema library for the class (output type).
       final lib = await buildClassSchemaLibrary(
@@ -87,7 +80,7 @@ class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
 
     // If the annotated element is an enum,
     // build a GraphQL enum type schema.
-    if (element is EnumElement2) {
+    if (element is EnumElement) {
       final lib = buildEnumSchemaLibrary(element, annotation);
       return lib.accept(DartEmitter()).toString();
     }
@@ -98,4 +91,3 @@ class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
     );
   }
 }
-

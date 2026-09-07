@@ -1,8 +1,7 @@
-
-import 'package:analyzer/dart/element/element2.dart';
-import 'package:angel3_serialize_generator/angel3_serialize_generator.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:code_builder/code_builder.dart';
+import 'package:graphql_generator3/src/build_context.dart';
 import 'package:graphql_schema3/graphql_schema3.dart';
 import 'package:source_gen/source_gen.dart';
 
@@ -38,22 +37,16 @@ import 'build_class_schema.dart';
 class GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
   @override
   Future<String> generateForAnnotatedElement(
-      Element2 element,
-      ConstantReader annotation,
-      BuildStep buildStep,
-      ) async {
+    Element element,
+    ConstantReader annotation,
+    BuildStep buildStep,
+  ) async {
     // Only classes are supported.
-    if (element is ClassElement2) {
+    if (element is ClassElement) {
       final packageName = buildStep.inputId.package;
 
-      // Collect serialization/build context for the class.
-      final ctx = await buildContext(
-        element,
-        annotation,
-        buildStep,
-        buildStep.resolver,
-        serializableTypeChecker.hasAnnotationOf(element),
-      );
+      // Naming context for the class.
+      final ctx = GraphQLBuildContext(element);
 
       // Build the schema library for the input type.
       final lib = await buildClassSchemaLibrary(
@@ -74,4 +67,3 @@ class GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
     );
   }
 }
-
