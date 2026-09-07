@@ -51,9 +51,13 @@ and its dependency set is unchanged.
 
 ## What version 3 changed
 
-A build-time dependency only: `analyzer`, `build`, `source_gen`, `code_builder`,
-`json_annotation` and `graphql_schema3`, whose annotations it reads. Nothing of
-it reaches the running application.
+A build-time dependency only: [`analyzer`](https://pub.dev/packages/analyzer),
+[`build`](https://pub.dev/packages/build),
+[`source_gen`](https://pub.dev/packages/source_gen),
+[`code_builder`](https://pub.dev/packages/code_builder),
+[`json_annotation`](https://pub.dev/packages/json_annotation) and
+[`graphql_schema3`](https://pub.dev/packages/graphql_schema3), whose annotations
+it reads. Nothing of it reaches the running application.
 
 Removed:
 
