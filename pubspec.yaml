@@ -19,7 +19,7 @@ dependencies:
   analyzer: ^14.3.0
   build: ^4.0.11
   code_builder: ^4.12.0
-  graphql_schema3: ^3.2.0
+  graphql_schema3: ^3.2.1
   json_annotation: ^4.12.0
   source_gen: ^4.3.0
 
