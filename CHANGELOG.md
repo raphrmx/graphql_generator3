@@ -2,6 +2,10 @@
 
 ## 3.2.0
 
+First release published to pub.dev. `graphql_schema3` is now a hosted dependency
+rather than a git one, which is what publishing requires and what lets a
+consumer resolve the whole stack from pub.
+
 ### Fixed
 - Descriptions and deprecation reasons are escaped before they are written into
   the generated source. `code_builder` escapes the quote but leaves the

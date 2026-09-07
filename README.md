@@ -1,6 +1,7 @@
 # GraphQL Generator 3
 
 [![Build](https://img.shields.io/github/actions/workflow/status/raphrmx/graphql_generator3/ci.yml?branch=main&label=build)](https://github.com/raphrmx/graphql_generator3/actions/workflows/ci.yml)
+[![Pub Version](https://img.shields.io/pub/v/graphql_generator3?color=blue)](https://pub.dev/packages/graphql_generator3)
 [![Maintainer](https://img.shields.io/badge/Maintainer-Raphael-purple)](https://comapps.be)
 [![License](https://img.shields.io/badge/Licence-BSD--3--Clause-blue)](LICENSE)
 
@@ -32,6 +33,20 @@ Why fork at all. Two reasons, and only the second one still holds:
 So: the `3` line does not track upstream and does not merge from it. It is
 maintained on its own, with three rules - as few dependencies as possible, no
 dependency that dictates the SDK, and no behaviour without a test covering it.
+
+### The `3` is a lineage marker, not a version and not a succession
+
+`graphql_generator2` is not this package's predecessor. It is its sibling, and it is
+alive: 7.0.0 as of August 2026, published by dukefirehawk.com, on its own
+numbering that long ago stopped matching the `2` in its name. The `3` here says
+only which line this fork was taken from.
+
+If you want the upstream package, take
+[`graphql_generator2`](https://pub.dev/packages/graphql_generator2). Take this
+one for the smaller dependency tree and the fixes listed below. They have not
+been offered upstream. The two lines were compared at upstream 7.0.0: every
+release it has cut since the fork point raises the Dart SDK floor or the linter,
+and its dependency set is unchanged.
 
 ## What version 3 changed
 
@@ -88,10 +103,19 @@ Added:
 
 The full list is in [CHANGELOG.md](CHANGELOG.md).
 
+## Installation
+
+`graphql_generator3` is a dev dependency; `graphql_schema3` carries the
+annotations and is a real one.
+
+```bash
+dart pub add graphql_schema3
+dart pub add dev:graphql_generator3 dev:build_runner
+```
+
 ## Usage
 
-Add it as a dev dependency, annotate a class with `@graphQLClass`, and run
-`build_runner`.
+Annotate a class with `@graphQLClass` and run `build_runner`.
 
 ```dart
 import 'package:graphql_schema3/graphql_schema3.dart';
