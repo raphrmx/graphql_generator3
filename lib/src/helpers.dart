@@ -18,14 +18,6 @@ bool isTypeIterable(DartType t) =>
 bool isTypeObject(DartType t) =>
     t is InterfaceType && objectTypeChecker.isExactlyType(t);
 
-/// Returns true if [t] is exactly a `JsonKey` annotation type.
-bool isTypeJsonKey(DartType t) =>
-    t is InterfaceType && jsonKeyTypeChecker.isExactlyType(t);
-
-/// Returns true if [t] is exactly a `JsonValue` annotation type.
-bool isTypeJsonValue(DartType t) =>
-    t is InterfaceType && jsonValueTypeChecker.isExactlyType(t);
-
 /// Returns true if [clazz] is an abstract class.
 /// Used to detect GraphQL interfaces.
 bool isTypeInterface(ClassElement clazz) => clazz.isAbstract;
@@ -73,46 +65,69 @@ bool isTypeGraphQLClass(InterfaceType clazz) {
 DartType? iterableArg(DartType t) =>
     isTypeIterable(t) ? (t as InterfaceType).typeArguments.first : null;
 
-/// Returns the documentation string for [element], either from comments
-/// or from a @GraphQLDocumentation annotation.
+/// The description GraphQL should carry for [element].
+///
+/// `@GraphQLDocumentation(description:)` is an explicit override and wins over
+/// the doc comment. The two used to disagree - the schema preferred the
+/// annotation, the generated SDL header preferred the doc comment - so a class
+/// carrying both was described one way in the schema and another in the file
+/// header. There is one rule now, and every caller goes through it.
 String? descriptionFor(Element element) {
-  var docString = element.documentationComment;
-  if (docString == null && graphQLDoc.hasAnnotationOf(element)) {
-    final ann = graphQLDoc.firstAnnotationOf(element);
-    final cr = ConstantReader(ann);
-    docString = cr.peek('description')?.stringValue;
-  }
-  if (docString == null) return null;
-  return docString.replaceAll(docComment, '').replaceAll('\n', '\\n');
-}
-
-/// Applies a description from [element] (doc comment or annotation)
-/// into [named] under the "description" key.
-void applyDescription(Map<String, Expression> named, Element element) {
   String? docString;
+
   if (graphQLDoc.hasAnnotationOf(element)) {
-    final ann = graphQLDoc.firstAnnotationOf(element);
-    final cr = ConstantReader(ann);
-    docString = cr.peek('description')?.stringValue;
+    docString = ConstantReader(
+      graphQLDoc.firstAnnotationOf(element),
+    ).peek('description')?.stringValue;
   }
 
   docString ??= element.documentationComment;
+  if (docString == null) return null;
 
-  if (docString != null) {
-    named['description'] = literalString(
-      docString.replaceAll(docComment, '').replaceAll('\n', '\\n'),
-    );
+  return docString.replaceAll(docComment, '');
+}
+
+/// A Dart string literal for [value] that holds up to whatever a doc comment
+/// can contain.
+///
+/// `literalString` escapes the quote, but leaves the backslash and the dollar
+/// sign alone: a description mentioning a Windows path reached the generated
+/// source as 'C:\temp', where \t is a tab, and one mentioning a price
+/// reached it as a string interpolation that does not compile. Both are
+/// escaped here, before code_builder sees them.
+Expression safeLiteralString(String value) =>
+    literalString(value.replaceAll('\\', '\\\\').replaceAll('\$', '\\\$'));
+
+/// Applies [descriptionFor] to [named] under the `description` key, when
+/// [element] has one.
+void applyDescription(Map<String, Expression> named, Element element) {
+  final description = descriptionFor(element);
+  if (description != null) {
+    named['description'] = safeLiteralString(description);
   }
 }
 
+/// Class name prefixes dropped from generated type names when the builder is
+/// given no `strip_class_prefixes` option.
+///
+/// The default is the one this generator shipped with. It is a setting rather
+/// than a constant because a prefix belongs to whoever names their classes, not
+/// to the generator: see the `strip_class_prefixes` builder option.
+const List<String> defaultStrippedPrefixes = <String>['Bmc'];
+
 /// Computes the GraphQL type name for a class [clazz].
-/// - Removes "Bmc" prefix if present.
-/// - Adds underscore `_` for outputs.
-/// - Adds suffix "Input" for inputs.
-String graphQLTypeNameFor(ClassElement clazz, {required bool isInput}) {
+/// - Drops the first matching prefix in [stripPrefixes], if any.
+/// - Adds a leading underscore for outputs.
+/// - Adds the "Input" suffix for inputs.
+String graphQLTypeNameFor(
+  ClassElement clazz, {
+  required bool isInput,
+  List<String> stripPrefixes = defaultStrippedPrefixes,
+}) {
   final raw = clazz.displayName; // eg: BmcBddEmployee or BmcBddEmployeeInput
 
-  var base = raw.startsWith('Bmc') ? raw.substring(3) : raw;
+  final prefix = stripPrefixes.firstWhere(raw.startsWith, orElse: () => '');
+  var base = prefix.isEmpty ? raw : raw.substring(prefix.length);
 
   if (isInput) {
     if (base.endsWith('Input')) {
@@ -122,17 +137,6 @@ String graphQLTypeNameFor(ClassElement clazz, {required bool isInput}) {
   }
 
   return base.startsWith('_') ? base : '_$base';
-}
-
-/// Builds the import path for a resolver function based on [clazz] and [fieldName].
-String resolverImportFor(
-  ClassElement clazz,
-  String fieldName, {
-  required String packageName,
-}) {
-  final typeSnake = snakeCase(clazz.displayName); // ex: bmc_device_data
-  final fieldSnake = snakeCase(fieldName); // ex: booking_date_data
-  return 'package:$packageName/graphql/resolvers/${typeSnake}_${fieldSnake}_resolver.dart';
 }
 
 /// Unwraps a `Future<T>` type and returns `T`.
@@ -163,17 +167,17 @@ Future<Expression> graphQLTypeForDartType(
     final typeName = unwrapped.element.displayName;
     final isGraphQLClass = isTypeGraphQLClass(unwrapped);
     if (isGraphQLClass && typeName != clazz.displayName) {
-      if (!cache.containsKey(typeName)) {
-        // Asynchronously resolve the type of the other class.
-        cache[typeName] = inferType(
-          clazz.displayName,
-          memberName,
-          unwrapped,
-          forInput,
-          resolver,
-        );
-      }
-      return await cache[typeName]!;
+      // Keyed on the position as well as the name: inferType rejects a union
+      // in input position, so a type first resolved as a return value must not
+      // answer for the same type later seen as a parameter.
+      final cacheKey = forInput ? '$typeName:in' : '$typeName:out';
+      return await (cache[cacheKey] ??= inferType(
+        clazz.displayName,
+        memberName,
+        unwrapped,
+        forInput,
+        resolver,
+      ));
     }
   }
 
@@ -321,20 +325,4 @@ String? cleanDescription(String? doc) {
       .map((line) => line.replaceFirst(RegExp(r'^\s*///\s?'), ''))
       .join(' ')
       .trim();
-}
-
-List<FieldElement> collectFields(ClassElement clazz) {
-  final fields = <FieldElement>[];
-  InterfaceType? search = clazz.thisType;
-
-  while (search != null && !isTypeObject(search)) {
-    for (final f in search.element.fields) {
-      if (f.isStatic || !f.isOriginDeclaration) continue;
-      if (fields.any((e) => e.displayName == f.displayName)) continue;
-      fields.add(f);
-    }
-    search = search.superclass;
-  }
-
-  return fields;
 }

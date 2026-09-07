@@ -30,6 +30,11 @@ import 'helpers.dart';
 /// );
 /// ```
 class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
+  /// Class name prefixes dropped from the generated type names.
+  final List<String> stripPrefixes;
+
+  const GraphQLUnionGenerator({this.stripPrefixes = defaultStrippedPrefixes});
+
   @override
   Future<String> generateForAnnotatedElement(
     Element element,
@@ -47,7 +52,11 @@ class GraphQLUnionGenerator extends GeneratorForAnnotation<GraphQLUnion> {
     // SDL name of the union type (defaults to GraphQL naming convention)
     final sdlName =
         annotation.peek('name')?.stringValue ??
-        graphQLTypeNameFor(element, isInput: false);
+        graphQLTypeNameFor(
+          element,
+          isInput: false,
+          stripPrefixes: stripPrefixes,
+        );
 
     // Extract the list of types provided in `@GraphQLUnion(types: [...])`
     final typeObjs = annotation.peek('types')?.listValue ?? const [];

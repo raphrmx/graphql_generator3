@@ -39,7 +39,6 @@ import 'helpers.dart';
 /// - [ctx]: A [GraphQLBuildContext] carrying the naming rules for the class.
 /// - [ann]: The annotation attached to the class (`@GraphQLClass` or `@GraphQLInputClass`).
 /// - [isInputType]: Whether the generated type is for input (`true`) or output (`false`).
-/// - [packageName]: Name of the Dart package where this class lives.
 /// - [resolver]: The build resolver, used to resolve cross-library references.
 ///
 /// ### Example (output type)
@@ -80,11 +79,15 @@ Future<Library> buildClassSchemaLibrary(
   GraphQLBuildContext ctx,
   ConstantReader ann,
   bool isInputType, {
-  required String packageName,
   required Resolver resolver,
+  List<String> stripPrefixes = defaultStrippedPrefixes,
 }) async {
   final resolvedTypesCache = <String, Future<Expression>>{};
-  final typeName = graphQLTypeNameFor(clazz, isInput: isInputType);
+  final typeName = graphQLTypeNameFor(
+    clazz,
+    isInput: isInputType,
+    stripPrefixes: stripPrefixes,
+  );
   final args = <Expression>[literalString(typeName)];
   final named = <String, Expression>{};
 
@@ -141,7 +144,7 @@ Future<Library> buildClassSchemaLibrary(
     if (depAnn != null) {
       final dep = ConstantReader(depAnn);
       final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
-      namedArgs['deprecationReason'] = literalString(reason);
+      namedArgs['deprecationReason'] = safeLiteralString(reason);
     }
 
     // Return type
@@ -209,19 +212,7 @@ Future<Library> buildClassSchemaLibrary(
     if (depAnn != null) {
       final dep = ConstantReader(depAnn);
       final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
-      namedArgs['deprecationReason'] = literalString(reason);
-    }
-
-    var graphType = await inferType(
-      clazz.displayName,
-      f.displayName,
-      f.type,
-      isInputType,
-      resolver,
-    );
-
-    if (f.type.nullabilitySuffix == NullabilitySuffix.none) {
-      graphType = graphType.property('nonNullable').call([]);
+      namedArgs['deprecationReason'] = safeLiteralString(reason);
     }
 
     final jsonKeyName = ctx.jsonNameFor(f);
@@ -231,6 +222,22 @@ Future<Library> buildClassSchemaLibrary(
     final isListOfEnum = listArg != null && isTypeEnum(listArg);
 
     if (!isInputType) {
+      // Only output fields take their type from inferType; an input field goes
+      // through graphQLTypeForInputField below, which knows how to tie a
+      // recursive input type back to itself. Inferring both was work thrown
+      // away on every input class.
+      var graphType = await inferType(
+        clazz.displayName,
+        f.displayName,
+        f.type,
+        isInputType,
+        resolver,
+      );
+
+      if (f.type.nullabilitySuffix == NullabilitySuffix.none) {
+        graphType = graphType.property('nonNullable').call([]);
+      }
+
       String objRead = "(serialized as ${clazz.displayName}).${f.displayName}";
       if (isEnum) {
         objRead = "$objRead.toString().split('.').last";
@@ -256,9 +263,11 @@ Future<Library> buildClassSchemaLibrary(
 (serialized, args) => (serialized is Map<String, dynamic>) ? serialized['$jsonKeyName'] : $objRead
 """;
       namedArgs['resolve'] = CodeExpression(Code(resolverCode));
-    }
 
-    if (isInputType) {
+      fieldSpecs.add(
+        refer('field').call([literalString(jsonKeyName), graphType], namedArgs),
+      );
+    } else {
       final bool isRecursive = isSelfOrListOfSelf(f.type, clazz);
 
       final Expression fGraphType = isRecursive
@@ -276,11 +285,6 @@ Future<Library> buildClassSchemaLibrary(
           'GraphQLInputObjectField',
         ).call([literalString(jsonKeyName), fGraphType], namedArgs),
       );
-    } else {
-      // Output type
-      fieldSpecs.add(
-        refer('field').call([literalString(jsonKeyName), graphType], namedArgs),
-      );
     }
   }
 
@@ -292,14 +296,14 @@ Future<Library> buildClassSchemaLibrary(
   return Library((lb) {
     if (isInputType) {
       final typeIdent = '${ctx.modelVariablePrefix}InputGraphQLType';
-      final sdlName = graphQLTypeNameFor(clazz, isInput: true);
+      final sdlName = graphQLTypeNameFor(
+        clazz,
+        isInput: true,
+        stripPrefixes: stripPrefixes,
+      );
       final desc = descriptionFor(clazz);
 
       if (hasSelfRef) {
-        final typeIdent = '${ctx.modelVariablePrefix}InputGraphQLType';
-        final sdlName = graphQLTypeNameFor(clazz, isInput: true);
-        final desc = descriptionFor(clazz);
-
         lb.body.add(
           Field((fb) {
             fb

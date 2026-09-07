@@ -45,12 +45,6 @@ const jsonKeyTypeChecker = TypeChecker.fromUrl(
   'package:json_annotation/src/json_key.dart#JsonKey',
 );
 
-/// TypeChecker for the `@JsonValue` annotation.
-/// Used to assign explicit values to enum members in JSON.
-const jsonValueTypeChecker = TypeChecker.fromUrl(
-  'package:json_annotation/src/json_value.dart#JsonValue',
-);
-
 /// TypeChecker for the Dart core `Iterable` type.
 const iterableTypeChecker = TypeChecker.fromUrl('dart:core#Iterable');
 

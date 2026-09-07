@@ -1,5 +1,50 @@
 # Change Log
 
+## 3.2.0
+
+### Fixed
+- Descriptions and deprecation reasons are escaped before they are written into
+  the generated source. `code_builder` escapes the quote but leaves the
+  backslash and the dollar sign alone, so a doc comment mentioning a Windows
+  path emitted `'C:\temp'`, where `\t` is a tab, and one mentioning `$rate`
+  emitted a string interpolation that does not compile. Every piece of authored
+  text now goes through `safeLiteralString`.
+- The enum builder assembles `code_builder` expressions like the rest of the
+  generator instead of pasting its type together as source text and escaping
+  the single quote by hand.
+- One rule decides a description. `@GraphQLDocumentation(description:)` is an
+  explicit override and wins over the doc comment everywhere; the schema
+  preferred the annotation while the generated header preferred the comment, so
+  a class carrying both was described two different ways in the same file.
+- The resolved-type cache is keyed on the position as well as the type name. A
+  union first resolved as a return value answered for the same union seen later
+  as a parameter, where it should have been rejected.
+
+### Added
+- A `strip_class_prefixes` builder option. The class name prefix dropped when
+  naming a GraphQL type was written into the generator; it belongs to whoever
+  names the classes. Left unset it keeps stripping `Bmc`, so nothing changes
+  for an existing build; set it to `[]` to strip nothing.
+- Tests for the naming rule, the option, and the escaping. 39 in all.
+
+### Removed
+- `collectFields`, `resolverImportFor`, `isTypeJsonKey`, `isTypeJsonValue` and
+  `jsonValueTypeChecker`: none had a caller. The unused `packageName` parameter
+  went with them, along with three locals a nested block re-declared over the
+  identical ones already in scope.
+
+### Changed
+- An input class no longer runs `inferType` over every field only to discard
+  the answer: an input field takes its type from `graphQLTypeForInputField`,
+  which is the only one that knows how to tie a recursive input back to itself.
+
+### Note on generated output
+Regenerating the 179 models of the consuming project gives byte-identical
+output on 161 of the 162 generated files. The one difference is the fix: a doc
+comment holding an authored `\n` inside a JSON example used to reach the schema
+as a real line break, and now reaches it as the two characters the comment
+actually spells.
+
 ## 3.1.0
 
 ### Removed

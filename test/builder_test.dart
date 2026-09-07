@@ -51,10 +51,12 @@ class JsonKey {
 
 /// Runs the builder over [source] and returns the generated part, with runs of
 /// whitespace collapsed so the assertions do not depend on the formatter.
-Future<String> generate(String source) async {
+Future<String> generate(String source, {Map<String, dynamic>? options}) async {
   final logs = <String>[];
   final result = await testBuilder(
-    graphQLBuilder(BuilderOptions.empty),
+    graphQLBuilder(
+      options == null ? BuilderOptions.empty : BuilderOptions(options),
+    ),
     {..._stubs, 'a|lib/fixture.dart': source},
     generateFor: {'a|lib/fixture.dart'},
     // Keep the generated part addressable by its own asset id.
@@ -291,6 +293,117 @@ class Company extends BaseModel {
 
       expect(out, contains("field('vatNo'"));
       expect(out, contains("field('id'"));
+    });
+  });
+
+  group('type names', () {
+    test('drops the default stripped prefix', () async {
+      final out = await generate('''
+$_header
+@graphQLClass
+class BmcBddEmployee {
+  final String name;
+  BmcBddEmployee(this.name);
+}
+''');
+
+      expect(out, contains("objectType('_BddEmployee'"));
+    });
+
+    test('drops a prefix named by strip_class_prefixes', () async {
+      final out = await generate(
+        '''
+$_header
+@graphQLClass
+class AcmeWidget {
+  final String name;
+  AcmeWidget(this.name);
+}
+''',
+        options: <String, dynamic>{
+          'strip_class_prefixes': <String>['Acme'],
+        },
+      );
+
+      expect(out, contains("objectType('_Widget'"));
+    });
+
+    test('strips nothing when the option is an empty list', () async {
+      final out = await generate(
+        '''
+$_header
+@graphQLClass
+class BmcBddEmployee {
+  final String name;
+  BmcBddEmployee(this.name);
+}
+''',
+        options: <String, dynamic>{'strip_class_prefixes': <String>[]},
+      );
+
+      expect(out, contains("objectType('_BmcBddEmployee'"));
+    });
+
+    test('names an input type by the same rule', () async {
+      final out = await generate('''
+$_header
+@GraphQLInputClass()
+class BmcCompanyInput {
+  final String name;
+  BmcCompanyInput(this.name);
+}
+''');
+
+      expect(out, contains("inputObjectType('_CompanyInput'"));
+    });
+  });
+
+  group('descriptions', () {
+    test('@GraphQLDocumentation wins over the doc comment', () async {
+      // The two used to disagree depending on which side of the generator read
+      // them; the annotation is the explicit override, so it wins everywhere.
+      final out = await generate('''
+$_header
+/// Written in the source.
+@graphQLClass
+@GraphQLDocumentation(description: 'Written in the annotation.')
+class Company {
+  final String vatNo;
+  Company(this.vatNo);
+}
+''');
+
+      expect(out, contains("description: 'Written in the annotation.'"));
+      expect(out, isNot(contains('Written in the source.')));
+    });
+
+    test('a description carrying a dollar sign is not interpolated', () async {
+      final out = await generate('''
+$_header
+@graphQLClass
+class Invoice {
+  /// Total in \$USD, taxes included.
+  final String total;
+  Invoice(this.total);
+}
+''');
+
+      expect(out, contains(r'\$USD'));
+    });
+
+    test('an enum description survives a quote and a backslash', () async {
+      // Descriptions used to be pasted into the emitted source with only the
+      // single quote escaped, so a backslash produced Dart that said something
+      // other than the comment did - or that did not parse at all.
+      final out = await generate('''
+$_header
+/// Reads C:\\temp under the operator's name.
+@graphQLClass
+enum Status { active }
+''');
+
+      expect(out, contains(r"C:\\temp"));
+      expect(out, contains(r"operator\'s name"));
     });
   });
 

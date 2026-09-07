@@ -6,6 +6,7 @@ import 'package:graphql_schema3/graphql_schema3.dart';
 import 'package:source_gen/source_gen.dart';
 
 import 'build_class_schema.dart';
+import 'helpers.dart';
 
 /// A source_gen generator that builds GraphQL **input object types**
 /// for classes annotated with `@GraphQLInputClass`.
@@ -35,6 +36,11 @@ import 'build_class_schema.dart';
 /// );
 /// ```
 class GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
+  /// Class name prefixes dropped from the generated type names.
+  final List<String> stripPrefixes;
+
+  const GraphQLInputGenerator({this.stripPrefixes = defaultStrippedPrefixes});
+
   @override
   Future<String> generateForAnnotatedElement(
     Element element,
@@ -43,8 +49,6 @@ class GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
   ) async {
     // Only classes are supported.
     if (element is ClassElement) {
-      final packageName = buildStep.inputId.package;
-
       // Naming context for the class.
       final ctx = GraphQLBuildContext(element);
 
@@ -54,8 +58,8 @@ class GraphQLInputGenerator extends GeneratorForAnnotation<GraphQLInputClass> {
         ctx,
         annotation,
         true, // isInputType = true
-        packageName: packageName,
         resolver: buildStep.resolver,
+        stripPrefixes: stripPrefixes,
       );
 
       return lib.accept(DartEmitter()).toString();

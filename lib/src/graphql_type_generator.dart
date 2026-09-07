@@ -7,6 +7,7 @@ import 'package:source_gen/source_gen.dart';
 
 import 'build_class_schema.dart';
 import 'build_enum_schema.dart';
+import 'helpers.dart';
 
 /// A source_gen generator that builds GraphQL schema types
 /// for classes and enums annotated with `@GraphQLClass`.
@@ -51,6 +52,11 @@ import 'build_enum_schema.dart';
 ///   enumTypeFromStrings('Status', ['active', 'inactive']);
 /// ```
 class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
+  /// Class name prefixes dropped from the generated type names.
+  final List<String> stripPrefixes;
+
+  const GraphQLGenerator({this.stripPrefixes = defaultStrippedPrefixes});
+
   @override
   Future<String> generateForAnnotatedElement(
     Element element,
@@ -60,8 +66,6 @@ class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
     // If the annotated element is a class,
     // build a GraphQL object type schema.
     if (element is ClassElement) {
-      final packageName = buildStep.inputId.package;
-
       // Naming context for the class.
       final ctx = GraphQLBuildContext(element);
 
@@ -71,8 +75,8 @@ class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
         ctx,
         annotation,
         false, // isInputType = false (this generator only handles output types)
-        packageName: packageName,
         resolver: buildStep.resolver,
+        stripPrefixes: stripPrefixes,
       );
 
       return lib.accept(DartEmitter()).toString();
@@ -81,7 +85,7 @@ class GraphQLGenerator extends GeneratorForAnnotation<GraphQLClass> {
     // If the annotated element is an enum,
     // build a GraphQL enum type schema.
     if (element is EnumElement) {
-      final lib = buildEnumSchemaLibrary(element, annotation);
+      final lib = buildEnumSchemaLibrary(element);
       return lib.accept(DartEmitter()).toString();
     }
 

@@ -33,38 +33,41 @@ import 'helpers.dart';
 ///
 /// This function is part of the GraphQL schema generator pipeline and ensures
 /// that Dart enums can be directly exposed as GraphQL enums.
-Library buildEnumSchemaLibrary(EnumElement clazz, ConstantReader ann) {
+Library buildEnumSchemaLibrary(EnumElement clazz) {
   return Library((b) {
     final className = clazz.displayName;
 
-    final desc = cleanDescription(clazz.documentationComment);
-    final descArg = desc != null && desc.isNotEmpty
-        ? ", description: '${desc.replaceAll("'", "\\'")}'"
-        : "";
+    // Everything below is built as code_builder expressions rather than
+    // concatenated source. The previous version pasted descriptions straight
+    // into a string literal and escaped only the single quote, so a doc comment
+    // containing a backslash emitted Dart that no longer said what the comment
+    // said - and, often enough, Dart that did not parse.
+    final values = clazz.constants.map((f) {
+      final named = <String, Expression>{};
 
-    final valuesCode = clazz.constants
-        .map((f) {
-          final v = f.displayName;
+      final valueDescription = cleanDescription(f.documentationComment);
+      if (valueDescription != null && valueDescription.isNotEmpty) {
+        named['description'] = safeLiteralString(valueDescription);
+      }
 
-          // Per-value description.
-          final vDesc = cleanDescription(f.documentationComment);
-          final descPart = (vDesc != null && vDesc.isNotEmpty)
-              ? ", description: '${vDesc.replaceAll("'", "\\'")}'"
-              : "";
+      final depAnn = deprecatedTypeChecker.firstAnnotationOf(f);
+      if (depAnn != null) {
+        named['deprecationReason'] = safeLiteralString(
+          ConstantReader(depAnn).peek('message')?.stringValue ?? 'Deprecated.',
+        );
+      }
 
-          // Per-value deprecation.
-          final depAnn = deprecatedTypeChecker.firstAnnotationOf(f);
-          String depPart = "";
-          if (depAnn != null) {
-            final dep = ConstantReader(depAnn);
-            final reason = dep.peek('message')?.stringValue ?? 'Deprecated.';
-            depPart = ", deprecationReason: '${reason.replaceAll("'", "\\'")}'";
-          }
+      return refer('GraphQLEnumValue').call([
+        literalString(f.displayName),
+        refer(className).property(f.displayName),
+      ], named);
+    }).toList();
 
-          return "GraphQLEnumValue('$v', $className.$v$descPart$depPart)";
-        })
-        .whereType<String>()
-        .join(", ");
+    final named = <String, Expression>{};
+    final description = cleanDescription(clazz.documentationComment);
+    if (description != null && description.isNotEmpty) {
+      named['description'] = safeLiteralString(description);
+    }
 
     b.body.add(
       Field((b) {
@@ -77,13 +80,13 @@ Library buildEnumSchemaLibrary(EnumElement clazz, ConstantReader ann) {
               ..types.add(refer(className)),
           )
           ..modifier = FieldModifier.final$
-          ..assignment = Code(
-            'GraphQLEnumType<$className>('
-            '\'$className\', '
-            '[$valuesCode]'
-            '$descArg'
-            ')',
-          );
+          ..assignment = refer('GraphQLEnumType')
+              .call(
+                [literalString(className), literalList(values)],
+                named,
+                [refer(className)],
+              )
+              .code;
       }),
     );
   });
